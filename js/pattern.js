@@ -305,8 +305,9 @@
    */
   function draw(canvas, pat, view) {
     const L = layout(pat, view.cell);
-    const dpr = view.dpr || 1;
     const footerH = view.footer ? 22 : 0;
+    // Safari/iOS limita el área del canvas (~16 M px): reducimos la resolución si hace falta
+    const dpr = Math.min(view.dpr || 1, Math.sqrt(12e6 / (L.width * (L.height + footerH))));
     canvas.width = L.width * dpr;
     canvas.height = (L.height + footerH) * dpr;
     canvas.style.width = L.width + "px";

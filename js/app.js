@@ -11,8 +11,14 @@
   function showApp(s) {
     $("login").hidden = true; $("app").hidden = false;
     $("whoName").textContent = s.name;
+    $("dock").hidden = false;
     state.user = s;
   }
+  const narrow = () => window.matchMedia("(max-width: 860px)").matches;
+  const goTo = (el) => { if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  $("dockSet").addEventListener("click", () => goTo(document.querySelector(".panel")));
+  $("dockChart").addEventListener("click", () => { if (state.pat) goTo($("chart").closest(".card")); else { notify("Primero sube una imagen.", "warn"); goTo(document.querySelector(".panel")); } });
+  $("dockSteps").addEventListener("click", () => { if (state.pat) goTo($("trkTitle").closest(".card")); else notify("Primero sube una imagen.", "warn"); });
   function checkSession() {
     const s = Auth.session();
     if (s) showApp(s); else { $("login").hidden = false; $("app").hidden = true; }
@@ -101,6 +107,7 @@
         const small = img.naturalWidth < +$("width").value * 4;
         if (small) notify("Imagen cargada, pero es pequeña (" + img.naturalWidth + "×" + img.naturalHeight + " px): el resultado puede verse borroso. Mejor usa una más grande y nítida.", "warn");
         else notify("Imagen cargada: " + name, "ok");
+        if (narrow()) setTimeout(() => goTo($("result")), 150);
       }
     };
     img.onerror = () => {
@@ -276,6 +283,8 @@
   $("bgReset").addEventListener("click", () => { pushUndo(); bg.mask = Uint8Array.from(bg.base); maskChanged(true); });
   document.querySelectorAll("[data-tool]").forEach((b) => b.addEventListener("click", () => {
     bg.tool = b.dataset.tool;
+    // con el pincel el dedo no debe desplazar la página; con la varita sí
+    $("editCv").style.touchAction = bg.tool === "wand" ? "pan-x pan-y pinch-zoom" : "none";
     document.querySelectorAll("[data-tool]").forEach((o) => o.setAttribute("aria-pressed", o === b));
   }));
 
@@ -297,21 +306,25 @@
       }
       maskChanged(false);
     }
+    // Varita: actúa al soltar un toque (no al arrastrar para desplazar la página)
+    cv.addEventListener("click", (e) => {
+      if (!bg.orig || bg.tool !== "wand") return;
+      const [x, y] = pos(e);
+      if (x < 0 || y < 0 || x >= bg.w || y >= bg.h) return;
+      const i = y * bg.w + x;
+      if (!bg.mask[i]) { notify("Esa zona ya está quitada. Toca una zona visible.", "warn"); return; }
+      pushUndo();
+      const d = bg.orig.data;
+      const n = flood([i], [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]], +$("tol").value);
+      if (!n) bg.undo.pop();
+      maskChanged(true);
+    });
     cv.addEventListener("pointerdown", (e) => {
-      if (!bg.orig) return;
+      if (!bg.orig || bg.tool === "wand") return;
       e.preventDefault();
       const [x, y] = pos(e);
       if (x < 0 || y < 0 || x >= bg.w || y >= bg.h) return;
       pushUndo();
-      if (bg.tool === "wand") {
-        const i = y * bg.w + x;
-        if (!bg.mask[i]) { bg.undo.pop(); notify("Esa zona ya está quitada. Toca una zona visible.", "warn"); return; }
-        const d = bg.orig.data;
-        const n = flood([i], [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]], +$("tol").value);
-        if (!n) bg.undo.pop();
-        maskChanged(true);
-        return;
-      }
       down = true; cv.setPointerCapture(e.pointerId); paint(e);
     });
     cv.addEventListener("pointermove", (e) => { if (down) paint(e); });
