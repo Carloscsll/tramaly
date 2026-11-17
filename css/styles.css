@@ -38,6 +38,11 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 .brand.big { font-size: 1.4rem; }
 .dot { width: 14px; height: 14px; border-radius: 50%; background: conic-gradient(var(--accent), #e8a33d, #3f8fd6, var(--accent)); }
 
+.pw { position: relative; }
+.pw input { padding-right: 44px; }
+.eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; display: grid; place-items: center; background: none; border: 0; border-radius: 8px; color: var(--muted); cursor: pointer; }
+.eye:hover { color: var(--accent); }
+.eye:focus-visible { outline: 2px solid var(--accent); }
 .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .login-card { width: min(380px, 100%); display: grid; gap: 4px; }
 

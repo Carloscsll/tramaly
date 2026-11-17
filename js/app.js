@@ -25,6 +25,14 @@
     $("lPass").value = "";
     showApp(r.session);
   });
+  $("pwToggle").addEventListener("click", () => {
+    const show = $("lPass").type === "password";
+    $("lPass").type = show ? "text" : "password";
+    $("pwToggle").setAttribute("aria-pressed", show);
+    $("pwToggle").setAttribute("aria-label", show ? "Ocultar contraseña" : "Mostrar contraseña");
+    $("eyeOn").hidden = show; $("eyeOff").hidden = !show;
+    $("lPass").focus();
+  });
   $("logoutBtn").addEventListener("click", () => { Auth.logout(); location.reload(); });
   // cierre automático al expirar la sesión
   setInterval(() => { if (!$("app").hidden && !Auth.session()) location.reload(); }, 30000);
