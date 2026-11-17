@@ -81,7 +81,7 @@
     };
   }
 
-  const SYMBOLS = "●■▲◆★✚✖○□△◇☆ABCDEFGHJKLMNPRSTUVWXYZ23456789".split("");
+  const SYMBOLS = "ABCDEFGHJKLMNPQRSTUVWXYZ".split("");
 
   /**
    * Genera la plantilla.
