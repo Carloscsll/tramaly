@@ -32,11 +32,11 @@
     <aside class="panel">
       <section>
         <h2>1 · Imagen</h2>
-        <label id="drop" class="drop">
-          <input id="file" type="file" accept="image/*" hidden>
-          <strong>Sube o arrastra una imagen</strong>
-          <span class="muted">JPG, PNG, WEBP</span>
-        </label>
+        <div id="drop" class="drop" role="button" tabindex="0" aria-label="Subir imagen">
+          <strong>Toca para subir o arrastra una imagen</strong>
+          <span class="muted">JPG, PNG, WEBP, GIF · también puedes pegar con Ctrl/⌘+V · máx. 20 MB</span>
+        </div>
+        <input id="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif" hidden>
         <button id="sampleBtn" class="btn ghost small" type="button">Usar imagen de ejemplo</button>
       </section>
 
@@ -58,6 +58,7 @@
         <label><span>Máx. colores: <b id="vColors">8</b></span>
           <input id="colors" type="range" min="2" max="24" value="8"></label>
         <label class="check"><input id="dither" type="checkbox"> Difuminado (más detalle)</label>
+        <label class="check"><input id="mirror" type="checkbox"> Voltear horizontalmente (espejo)</label>
         <details>
           <summary>Ajustes de imagen</summary>
           <label><span>Brillo <b id="vBr">0</b></span><input id="brightness" type="range" min="-50" max="50" value="0"></label>
@@ -74,6 +75,7 @@
     </aside>
 
     <main class="main">
+      <div id="msg" class="msg" role="status" aria-live="polite" hidden></div>
       <div id="empty" class="empty card">
         <h1>Convierte una imagen en plantilla de cuentas</h1>
         <p class="muted">Sube una imagen, elige técnica y colores, y la app te da la plantilla, la lista de cuentas y las instrucciones paso a paso.</p>

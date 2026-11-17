@@ -85,6 +85,14 @@ canvas { display: block; }
 .allsteps li { padding: 6px 8px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: .88rem; }
 .allsteps li:hover { background: var(--accent-soft); }
 
+.msg { padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; border: 1px solid var(--line); background: var(--card); display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.msg.error { border-color: #c0392b; background: rgba(192,57,43,.12); }
+.msg.warn { border-color: #d9a21b; background: rgba(217,162,27,.14); }
+.msg.ok { border-color: #3a9a5b; background: rgba(58,154,91,.12); }
+.msg button { background: none; border: 0; color: inherit; font-size: 1.1rem; cursor: pointer; line-height: 1; }
+.drop.busy { opacity: .6; pointer-events: none; }
+body.dragging::after { content: "Suelta la imagen aquí"; position: fixed; inset: 0; display: grid; place-items: center; font-size: 1.4rem; font-weight: 700; background: rgba(176,52,95,.25); color: var(--ink); z-index: 50; pointer-events: none; }
+
 #printArea { display: none; }
 
 @media (max-width: 860px) {

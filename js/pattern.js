@@ -111,6 +111,7 @@
       src = t; sw = t.width; sh = t.height;
     }
     ctx.imageSmoothingQuality = "high";
+    if (opts.mirror) { ctx.translate(W, 0); ctx.scale(-1, 1); }
     ctx.drawImage(src, 0, 0, W, H);
     const data = ctx.getImageData(0, 0, W, H).data;
 
