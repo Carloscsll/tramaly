@@ -76,6 +76,17 @@
       </section>
 
       <section>
+        <h2>Fondo</h2>
+        <label>Color del fondo <select id="bgColor"></select></label>
+        <label><span>Tolerancia <b id="vTol">35</b></span><input id="tol" type="range" min="5" max="120" value="35"></label>
+        <div class="row2">
+          <button id="bgAuto" class="btn small" type="button">Quitar fondo auto</button>
+          <button id="bgEdit" class="btn ghost small" type="button">Editar a mano</button>
+        </div>
+        <p class="muted small">Ideal para fondos lisos. Para fondos difíciles usa la varita o el pincel.</p>
+      </section>
+
+      <section>
         <h2>Vista</h2>
         <label><span>Zoom <b id="vZoom">18</b></span><input id="zoom" type="range" min="8" max="40" value="18"></label>
         <label class="check"><input id="symbols" type="checkbox" checked> Mostrar símbolos</label>
@@ -90,6 +101,22 @@
       </div>
 
       <div id="result" hidden>
+        <div id="bgEditor" class="card" hidden>
+          <div class="ed-bar">
+            <div class="seg" role="group" aria-label="Herramienta">
+              <button type="button" class="btn small" data-tool="wand" aria-pressed="true">Varita</button>
+              <button type="button" class="btn small" data-tool="erase" aria-pressed="false">Borrar</button>
+              <button type="button" class="btn small" data-tool="restore" aria-pressed="false">Restaurar</button>
+            </div>
+            <label class="inline"><span>Pincel <b id="vBrush">20</b></span><input id="brush" type="range" min="4" max="80" value="20"></label>
+            <button id="bgUndo" class="btn small" type="button">Deshacer</button>
+            <button id="bgReset" class="btn small" type="button">Restaurar todo</button>
+            <button id="bgClose" class="btn small primary" type="button">Listo</button>
+          </div>
+          <p class="muted small" id="bgHint">Varita: toca una zona del fondo para quitarla. Borrar/Restaurar: pinta sobre la imagen. El cuadriculado gris es lo que se quitó.</p>
+          <div class="ed-wrap"><canvas id="editCv"></canvas></div>
+        </div>
+
         <div class="summary card">
           <div><span class="muted">Técnica</span><b id="sTech"></b></div>
           <div><span class="muted">Cuadrícula</span><b id="sGrid"></b></div>

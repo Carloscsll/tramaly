@@ -94,7 +94,9 @@
       drop.classList.remove("busy");
       if (revoke) URL.revokeObjectURL(src);
       if (!img.naturalWidth || !img.naturalHeight) { notify("La imagen no tiene dimensiones válidas.", "error"); return; }
-      state.img = img; state.name = name; state.step = -1; state.highlight = null;
+      initWork(img);
+      state.name = name; state.step = -1; state.highlight = null;
+      $("bgEditor").hidden = true;
       if (regen()) {
         const small = img.naturalWidth < +$("width").value * 4;
         if (small) notify("Imagen cargada, pero es pequeña (" + img.naturalWidth + "×" + img.naturalHeight + " px): el resultado puede verse borroso. Mejor usa una más grande y nítida.", "warn");
@@ -168,17 +170,166 @@
     loadImage(c.toDataURL(), "ejemplo");
   });
 
+  // ---------- Quitar fondo ----------
+  const bg = { orig: null, w: 0, h: 0, base: null, mask: null, undo: [], tool: "wand", ver: 0, raf: 0 };
+  (window.MIYUKI_PALETTE || []).forEach((p, i) => {
+    const o = document.createElement("option"); o.value = p[2]; o.textContent = p[0] + " · " + p[1];
+    if (i === 1) o.selected = true; // blanco tiza por defecto
+    $("bgColor").appendChild(o);
+  });
+
+  function initWork(img) {
+    const sc = Math.min(1, 1000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * sc)), h = Math.max(1, Math.round(img.naturalHeight * sc));
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const x = c.getContext("2d", { willReadFrequently: true });
+    x.drawImage(img, 0, 0, w, h);
+    bg.orig = x.getImageData(0, 0, w, h); bg.w = w; bg.h = h;
+    bg.base = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) bg.base[i] = bg.orig.data[i * 4 + 3] >= 128 ? 255 : 0;
+    bg.mask = Uint8Array.from(bg.base); bg.undo = []; bg.ver = 0;
+    const work = document.createElement("canvas"); work.width = w; work.height = h;
+    bg.workCtx = work.getContext("2d");
+    bg.data = new ImageData(new Uint8ClampedArray(bg.orig.data), w, h);
+    state.img = work;
+    applyMask();
+  }
+  function applyMask() {
+    const d = bg.data.data;
+    for (let i = 0; i < bg.mask.length; i++) d[i * 4 + 3] = bg.mask[i];
+    bg.workCtx.putImageData(bg.data, 0, 0);
+  }
+  const checker = (() => {
+    const c = document.createElement("canvas"); c.width = c.height = 16;
+    const x = c.getContext("2d"); x.fillStyle = "#d9d4cb"; x.fillRect(0, 0, 16, 16);
+    x.fillStyle = "#f4f1ea"; x.fillRect(0, 0, 8, 8); x.fillRect(8, 8, 8, 8); return c;
+  })();
+  function drawEditor() {
+    if ($("bgEditor").hidden || !bg.orig) return;
+    const cv = $("editCv");
+    if (cv.width !== bg.w || cv.height !== bg.h) { cv.width = bg.w; cv.height = bg.h; }
+    const x = cv.getContext("2d");
+    x.fillStyle = x.createPattern(checker, "repeat"); x.fillRect(0, 0, bg.w, bg.h);
+    x.drawImage(state.img, 0, 0);
+  }
+  function removedPct() { let n = 0; for (let i = 0; i < bg.mask.length; i++) if (!bg.mask[i]) n++; return Math.round((n / bg.mask.length) * 100); }
+  let regenTimer;
+  function maskChanged(now) {
+    bg.ver++;
+    cancelAnimationFrame(bg.raf);
+    bg.raf = requestAnimationFrame(() => { applyMask(); drawEditor(); });
+    clearTimeout(regenTimer);
+    regenTimer = setTimeout(() => { applyMask(); regen(); }, now ? 0 : 250);
+  }
+  function pushUndo() { bg.undo.push(Uint8Array.from(bg.mask)); if (bg.undo.length > 20) bg.undo.shift(); }
+
+  function flood(seeds, ref, tol) {
+    const { w, h } = bg, d = bg.orig.data, t2 = tol * tol;
+    const seen = new Uint8Array(w * h), q = new Int32Array(w * h);
+    let qh = 0, qt = 0, removed = 0;
+    const near = (i) => {
+      const dr = d[i * 4] - ref[0], dg = d[i * 4 + 1] - ref[1], db = d[i * 4 + 2] - ref[2];
+      return dr * dr + dg * dg + db * db <= t2;
+    };
+    for (const s of seeds) if (!seen[s] && bg.mask[s] && near(s)) { seen[s] = 1; q[qt++] = s; }
+    while (qh < qt) {
+      const i = q[qh++]; bg.mask[i] = 0; removed++;
+      const x = i % w, y = (i / w) | 0;
+      const nb = [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1];
+      for (const n of nb) if (n >= 0 && !seen[n] && bg.mask[n] && near(n)) { seen[n] = 1; q[qt++] = n; }
+    }
+    return removed;
+  }
+  function median(a) { a.sort((p, q) => p - q); return a[a.length >> 1]; }
+
+  function autoRemove() {
+    if (!bg.orig) { notify("Primero sube una imagen.", "warn"); return; }
+    const { w, h } = bg, d = bg.orig.data, tol = +$("tol").value;
+    const edge = [];
+    for (let x = 0; x < w; x++) { edge.push(x, (h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { edge.push(y * w, y * w + w - 1); }
+    const px = edge.filter((i) => bg.mask[i]);
+    if (!px.length) { notify("El fondo ya está transparente.", "warn"); return; }
+    const ref = [0, 1, 2].map((c) => median(px.map((i) => d[i * 4 + c])));
+    pushUndo();
+    const n = flood(px, ref, tol);
+    const pct = Math.round((n / (w * h)) * 100);
+    if (pct < 1) {
+      bg.mask = bg.undo.pop();
+      notify("No encontré un fondo uniforme en los bordes. Prueba subir la tolerancia o usa la varita en el fondo.", "warn");
+      return;
+    }
+    maskChanged(true);
+    openEditor();
+    if (pct > 85) notify("Se quitó el " + pct + " % de la imagen: quizá el sujeto es parecido al fondo. Baja la tolerancia o usa “Restaurar”.", "warn");
+    else notify("Fondo quitado (" + pct + " % de la imagen). Ajusta a mano si hace falta.", "ok");
+  }
+
+  function openEditor() { $("bgEditor").hidden = false; drawEditor(); }
+  $("bgAuto").addEventListener("click", autoRemove);
+  $("bgEdit").addEventListener("click", () => { if (!bg.orig) { notify("Primero sube una imagen.", "warn"); return; } openEditor(); $("bgEditor").scrollIntoView({ block: "nearest", behavior: "smooth" }); });
+  $("bgClose").addEventListener("click", () => { $("bgEditor").hidden = true; });
+  $("bgColor").addEventListener("change", () => regen());
+  $("tol").addEventListener("input", () => { $("vTol").textContent = $("tol").value; });
+  $("brush").addEventListener("input", () => { $("vBrush").textContent = $("brush").value; });
+  $("bgUndo").addEventListener("click", () => { if (!bg.undo.length) { notify("No hay nada que deshacer.", "warn"); return; } bg.mask = bg.undo.pop(); maskChanged(true); });
+  $("bgReset").addEventListener("click", () => { pushUndo(); bg.mask = Uint8Array.from(bg.base); maskChanged(true); });
+  document.querySelectorAll("[data-tool]").forEach((b) => b.addEventListener("click", () => {
+    bg.tool = b.dataset.tool;
+    document.querySelectorAll("[data-tool]").forEach((o) => o.setAttribute("aria-pressed", o === b));
+  }));
+
+  (function editorPointer() {
+    const cv = $("editCv");
+    let down = false;
+    const pos = (e) => {
+      const r = cv.getBoundingClientRect();
+      return [Math.floor(((e.clientX - r.left) / r.width) * bg.w), Math.floor(((e.clientY - r.top) / r.height) * bg.h), bg.w / r.width];
+    };
+    function paint(e) {
+      const [px, py, scale] = pos(e);
+      const rad = (+$("brush").value / 2) * Math.max(1, scale), r2 = rad * rad;
+      const erase = bg.tool === "erase";
+      for (let y = Math.max(0, Math.floor(py - rad)); y <= Math.min(bg.h - 1, Math.ceil(py + rad)); y++) {
+        for (let x = Math.max(0, Math.floor(px - rad)); x <= Math.min(bg.w - 1, Math.ceil(px + rad)); x++) {
+          if ((x - px) * (x - px) + (y - py) * (y - py) <= r2) bg.mask[y * bg.w + x] = erase ? 0 : bg.base[y * bg.w + x];
+        }
+      }
+      maskChanged(false);
+    }
+    cv.addEventListener("pointerdown", (e) => {
+      if (!bg.orig) return;
+      e.preventDefault();
+      const [x, y] = pos(e);
+      if (x < 0 || y < 0 || x >= bg.w || y >= bg.h) return;
+      pushUndo();
+      if (bg.tool === "wand") {
+        const i = y * bg.w + x;
+        if (!bg.mask[i]) { bg.undo.pop(); notify("Esa zona ya está quitada. Toca una zona visible.", "warn"); return; }
+        const d = bg.orig.data;
+        const n = flood([i], [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]], +$("tol").value);
+        if (!n) bg.undo.pop();
+        maskChanged(true);
+        return;
+      }
+      down = true; cv.setPointerCapture(e.pointerId); paint(e);
+    });
+    cv.addEventListener("pointermove", (e) => { if (down) paint(e); });
+    const end = () => { if (down) { down = false; maskChanged(true); } };
+    cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+  })();
+
   // ---------- Generar / dibujar ----------
   function opts() {
     return {
       img: state.img, width: +$("width").value, tech: state.tech, bead: $("bead").value,
       maxColors: +$("colors").value, dither: $("dither").checked, mirror: $("mirror").checked,
       brightness: +$("brightness").value, contrast: +$("contrast").value, saturation: +$("saturation").value,
-      palette: window.MIYUKI_PALETTE,
+      palette: window.MIYUKI_PALETTE, bg: $("bgColor").value,
     };
   }
   function progressKey() {
-    return "tramaly.progress|" + [state.name, $("width").value, $("colors").value, state.tech, $("start").value, $("bead").value, $("dither").checked, $("mirror").checked, $("brightness").value, $("contrast").value, $("saturation").value].join("|");
+    return "tramaly.progress|" + [state.name, $("width").value, $("colors").value, state.tech, $("start").value, $("bead").value, $("dither").checked, $("mirror").checked, $("brightness").value, $("contrast").value, $("saturation").value, $("bgColor").value, bg.ver].join("|");
   }
   function regen() {
     if (!state.img) { notify("Primero sube una imagen.", "warn"); return false; }
