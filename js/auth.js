@@ -8,8 +8,8 @@
  */
 (function () {
   "use strict";
-  const KEY = "miyuki.session";
-  const FAIL = "miyuki.fails";
+  const KEY = "tramaly.session";
+  const FAIL = "tramaly.fails";
   const TTL = 8 * 3600 * 1000;
 
   const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");

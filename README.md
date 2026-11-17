@@ -1,4 +1,4 @@
-# Miyuki Patrones
+# Tramaly
 
 App web estática (HTML/CSS/JS, sin dependencias) que convierte una imagen en una plantilla de cuentas Miyuki:
 técnicas **Telar, Punto cuadrado, Brick stitch y Peyote**, colores con cantidades, plantilla con símbolos,

@@ -170,7 +170,7 @@
     };
   }
   function progressKey() {
-    return "miyuki.progress|" + [state.name, $("width").value, $("colors").value, state.tech, $("start").value, $("bead").value, $("dither").checked, $("mirror").checked, $("brightness").value, $("contrast").value, $("saturation").value].join("|");
+    return "tramaly.progress|" + [state.name, $("width").value, $("colors").value, state.tech, $("start").value, $("bead").value, $("dither").checked, $("mirror").checked, $("brightness").value, $("contrast").value, $("saturation").value].join("|");
   }
   function regen() {
     if (!state.img) { notify("Primero sube una imagen.", "warn"); return false; }
