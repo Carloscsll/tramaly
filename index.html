@@ -83,7 +83,7 @@
           <button id="bgAuto" class="btn small" type="button">Quitar fondo auto</button>
           <button id="bgEdit" class="btn ghost small" type="button">Editar a mano</button>
         </div>
-        <p class="muted small">Ideal para fondos lisos. Para fondos difíciles usa la varita o el pincel.</p>
+        <p class="muted small">Lo que se quita queda <b>vacío</b> (sin cuenta), para que el dibujo se lea bien. Si prefieres rellenarlo, elige un color arriba. Ideal para fondos lisos; si no, usa la varita o el pincel.</p>
       </section>
 
       <section>
@@ -138,19 +138,36 @@
           <p class="note">Los códigos son referencias internas: verifícalos con la carta oficial de Miyuki antes de comprar.</p>
         </div>
 
-        <div class="card">
-          <h2>Paso a paso</h2>
-          <div class="tracker">
-            <button id="prevStep" class="btn" aria-label="Paso anterior">‹</button>
-            <div class="trk-main">
-              <div id="trkTitle" class="trk-title"></div>
-              <div id="trkDir" class="muted small"></div>
-            </div>
-            <button id="nextStep" class="btn primary" aria-label="Paso siguiente">›</button>
+        <div class="card" id="guideCard">
+          <h2>Guía paso a paso</h2>
+          <details id="intro" class="intro">
+            <summary>Antes de empezar: materiales y cómo leer la plantilla</summary>
+            <div id="introBody"></div>
+          </details>
+
+          <div class="progress" aria-hidden="true"><div id="progBar"></div></div>
+          <div id="stepCount" class="step-count"></div>
+          <div id="trkTitle" class="trk-title"></div>
+
+          <div id="stepBody" hidden>
+            <div id="trkDir" class="dir"></div>
+            <p id="stepDo" class="do"></p>
+            <h3>Cuentas, en este orden</h3>
+            <div id="trkRuns" class="runs big"></div>
+            <p id="trkTotal" class="muted small"></p>
+            <details class="strip-box">
+              <summary>Ver cuenta por cuenta</summary>
+              <div id="stepStrip" class="strip"></div>
+            </details>
+            <p id="trkNote" class="note"></p>
           </div>
-          <div id="trkRuns" class="runs"></div>
-          <p id="trkNote" class="note"></p>
-          <button id="clearStep" class="btn ghost small">Quitar resaltado</button>
+          <p id="stepHelp" class="do">Pulsa <b>Empezar</b> para ver el primer paso. La plantilla resaltará lo que te toca y atenuará el resto.</p>
+
+          <div class="step-nav">
+            <button id="prevStep" class="btn" type="button">← Anterior</button>
+            <button id="nextStep" class="btn primary" type="button">Empezar →</button>
+          </div>
+          <button id="clearStep" class="btn ghost small" type="button">Quitar resaltado</button>
           <details class="allsteps"><summary>Ver todos los pasos</summary><ol id="stepList"></ol></details>
         </div>
       </div>

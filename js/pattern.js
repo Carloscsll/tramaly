@@ -98,8 +98,8 @@
     const cv = document.createElement("canvas");
     cv.width = W; cv.height = H;
     const ctx = cv.getContext("2d", { willReadFrequently: true });
-    ctx.fillStyle = opts.bg || "#ffffff";
-    ctx.fillRect(0, 0, W, H);
+    const useEmpty = opts.bg === "none"; // fondo quitado = sin cuenta
+    if (!useEmpty) { ctx.fillStyle = opts.bg || "#ffffff"; ctx.fillRect(0, 0, W, H); }
     // reducción por pasos para mejor calidad
     let src = img, sw = iw, sh = ih;
     while (sw / 2 > W * 2 && sh / 2 > H * 2) {
@@ -120,7 +120,9 @@
     const ct = 1 + (opts.contrast || 0) / 100;
     const sa = 1 + (opts.saturation || 0) / 100;
     const px = new Float32Array(W * H * 3);
+    const empty = new Uint8Array(W * H);
     for (let i = 0; i < W * H; i++) {
+      if (useEmpty && data[i * 4 + 3] < 128) empty[i] = 1;
       let r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
       const gray = 0.299 * r + 0.587 * g + 0.114 * b;
       r = gray + (r - gray) * sa; g = gray + (g - gray) * sa; b = gray + (b - gray) * sa;
@@ -139,8 +141,11 @@
     for (let i = 0; i < W * H; i++) labs[i] = rgb2lab(px[i * 3], px[i * 3 + 1], px[i * 3 + 2]);
     const rnd = mulberry32(12345);
     const sample = [];
-    const step = Math.max(1, Math.floor(labs.length / 8000));
-    for (let i = 0; i < labs.length; i += step) sample.push(labs[i]);
+    const idx = [];
+    for (let i = 0; i < labs.length; i++) if (!empty[i]) idx.push(i);
+    if (!idx.length) throw new Error("empty");
+    const step = Math.max(1, Math.floor(idx.length / 8000));
+    for (let k = 0; k < idx.length; k += step) sample.push(labs[idx[k]]);
     const K = Math.min(maxColors, palette.length, sample.length);
     const cent = [sample[Math.floor(rnd() * sample.length)].slice()];
     while (cent.length < K) {
@@ -183,6 +188,7 @@
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
           const i = y * W + x;
+          if (empty[i]) { grid[i] = 255; continue; }
           const r = Math.min(255, Math.max(0, buf[i * 3])), g = Math.min(255, Math.max(0, buf[i * 3 + 1])), b = Math.min(255, Math.max(0, buf[i * 3 + 2]));
           const k = nearest(rgb2lab(r, g, b));
           grid[i] = k;
@@ -197,21 +203,37 @@
         }
       }
     } else {
-      for (let i = 0; i < W * H; i++) grid[i] = nearest(labs[i]);
+      for (let i = 0; i < W * H; i++) grid[i] = empty[i] ? 255 : nearest(labs[i]);
     }
 
     // contar, ordenar por uso, asignar símbolos
     const counts = new Array(subset.length).fill(0);
-    for (let i = 0; i < grid.length; i++) counts[grid[i]]++;
+    let emptyCount = 0;
+    for (let i = 0; i < grid.length; i++) { if (grid[i] === 255) emptyCount++; else counts[grid[i]]++; }
     const order = counts.map((c, i) => i).filter((i) => counts[i] > 0).sort((a, b) => counts[b] - counts[a]);
     const remap = new Map(order.map((old, n) => [old, n]));
-    for (let i = 0; i < grid.length; i++) grid[i] = remap.get(grid[i]);
+    for (let i = 0; i < grid.length; i++) if (grid[i] !== 255) grid[i] = remap.get(grid[i]);
     const colors = order.map((old, n) => ({
       code: subset[old].code, name: subset[old].name, hex: subset[old].hex,
       count: counts[old], symbol: SYMBOLS[n % SYMBOLS.length], text: textColorFor(subset[old].hex),
     }));
 
-    return { W, H, grid, colors, tech, bead, cellMM: [cw, ch] };
+    // Recortar los bordes que quedaron completamente vacíos (fondo quitado)
+    let outW = W, outH = H, outGrid = grid, cropped = false;
+    if (emptyCount > 0) {
+      let x0 = W, x1 = -1, y0 = H, y1 = -1;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (grid[y * W + x] !== 255) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      outW = x1 - x0 + 1; outH = y1 - y0 + 1;
+      cropped = outW !== W || outH !== H;
+      if (cropped) {
+        outGrid = new Uint8Array(outW * outH);
+        for (let y = 0; y < outH; y++) for (let x = 0; x < outW; x++) outGrid[y * outW + x] = grid[(y + y0) * W + (x + x0)];
+      }
+    }
+    const emptyOut = outGrid.reduce((n, v) => n + (v === 255 ? 1 : 0), 0);
+    return { W: outW, H: outH, grid: outGrid, colors, tech, bead, cellMM: [cw, ch], emptyCount: emptyOut, beadCount: outW * outH - emptyOut, cropped };
   }
 
   // ---------- Pasos de trabajo ----------
@@ -228,28 +250,28 @@
     const { W, H, grid, tech } = pat;
     const at = (x, y) => grid[y * W + x];
     const steps = [];
-    const L2R = "izquierda → derecha", R2L = "derecha → izquierda";
-    const T2B = "arriba → abajo", B2T = "abajo → arriba";
+    const L2R = "De izquierda a derecha", R2L = "De derecha a izquierda";
+    const T2B = "De arriba hacia abajo", B2T = "De abajo hacia arriba";
     const ys = [...Array(H).keys()];
     if (start === "bottom") ys.reverse();
 
     if (tech === "peyote") {
       const yList = start === "bottom" ? [...Array(H).keys()].reverse() : [...Array(H).keys()];
       const fwd = start === "bottom" ? B2T : T2B, back = start === "bottom" ? T2B : B2T;
-      // paso 1: columnas 1 y 2 intercaladas
+      const aF = start === "bottom" ? "↑" : "↓", aB = start === "bottom" ? "↓" : "↑";
       const seq = [];
       for (const y of yList) { seq.push(at(0, y)); if (W > 1) seq.push(at(1, y)); }
       steps.push({
-        title: "Columnas 1 y 2 (inicio)", dir: fwd + " (intercalando col. 1 y 2)", seq,
+        kind: "start", title: "Columnas 1 y 2 (inicio)", dir: fwd, arrow: aF, seq,
         cells: yList.flatMap((y) => [[0, y], [1, y]]),
-        note: "Ensarta estas cuentas en orden; son la base del peyote.",
+        note: "Van alternadas: una cuenta de la columna 1, una de la columna 2, y así hasta el final.",
       });
       for (let x = 2; x < W; x++) {
-        const f = (x - 2) % 2 === 0 ? back : fwd;
-        const yy = (x - 2) % 2 === 0 ? [...yList].reverse() : yList;
+        const first = (x - 2) % 2 === 0;
+        const yy = first ? [...yList].reverse() : yList;
         steps.push({
-          title: "Columna " + (x + 1), dir: f, seq: yy.map((y) => at(x, y)),
-          cells: yy.map((y) => [x, y]),
+          kind: "next", title: "Columna " + (x + 1), dir: first ? back : fwd, arrow: first ? aB : aF,
+          seq: yy.map((y) => at(x, y)), cells: yy.map((y) => [x, y]),
         });
       }
     } else {
@@ -257,13 +279,10 @@
         const ltr = tech === "loom" ? true : n % 2 === 0;
         const xs = [...Array(W).keys()];
         if (!ltr) xs.reverse();
-        const step = {
-          title: "Fila " + (n + 1), dir: ltr ? L2R : R2L, seq: xs.map((x) => at(x, y)),
-          cells: xs.map((x) => [x, y]),
-        };
-        if (n === 0 && tech === "brick") step.note = "Esta fila es la base (escalera): cose cada cuenta a la anterior.";
-        if (n === 0 && tech === "loom") step.note = "Todas las filas se tejen en el mismo sentido.";
-        steps.push(step);
+        steps.push({
+          kind: n === 0 ? "start" : "next", title: "Fila " + (n + 1), dir: ltr ? L2R : R2L, arrow: ltr ? "→" : "←",
+          seq: xs.map((x) => at(x, y)), cells: xs.map((x) => [x, y]),
+        });
       });
     }
     steps.forEach((s) => (s.runs = runs(s.seq)));
@@ -326,6 +345,7 @@
     for (let y = 0; y < pat.H; y++) {
       for (let x = 0; x < pat.W; x++) {
         const ci = pat.grid[y * pat.W + x];
+        if (ci === 255) continue; // sin cuenta: no se dibuja nada
         const col = pat.colors[ci];
         const [bx, by] = beadPos(L, x, y);
         let dim = false;

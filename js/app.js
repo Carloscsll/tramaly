@@ -179,9 +179,12 @@
 
   // ---------- Quitar fondo ----------
   const bg = { orig: null, w: 0, h: 0, base: null, mask: null, undo: [], tool: "wand", ver: 0, raf: 0 };
-  (window.MIYUKI_PALETTE || []).forEach((p, i) => {
+  {
+    const none = document.createElement("option"); none.value = "none"; none.textContent = "Sin cuenta (vacío)"; none.selected = true;
+    $("bgColor").appendChild(none);
+  }
+  (window.MIYUKI_PALETTE || []).forEach((p) => {
     const o = document.createElement("option"); o.value = p[2]; o.textContent = p[0] + " · " + p[1];
-    if (i === 1) o.selected = true; // blanco tiza por defecto
     $("bgColor").appendChild(o);
   });
 
@@ -360,9 +363,9 @@
     try { const s = parseInt(localStorage.getItem(progressKey()), 10); if (s >= 0 && s < state.steps.length) state.step = s; } catch {}
     $("empty").hidden = true; $("result").hidden = false;
     renderSummary(); renderLegend(); renderSteps(); redraw();
-    const total = state.pat.grid.length;
+    const total = state.pat.beadCount;
     if (total > 15000) notify("Plantilla grande (" + total.toLocaleString() + " cuentas): son muchas horas de trabajo. Puedes bajar el ancho para hacerla más corta.", "warn");
-    else if (state.pat.colors.length < +$("colors").value && state.pat.colors.length <= 3) notify("La imagen quedó con solo " + state.pat.colors.length + " colores; sube el contraste o la saturación si esperabas más.", "warn");
+    else if (!state.pat.emptyCount && state.pat.colors.length < +$("colors").value && state.pat.colors.length <= 3) notify("La imagen quedó con solo " + state.pat.colors.length + " colores; sube el contraste o la saturación si esperabas más.", "warn");
     return true;
   }
   function footer() {
@@ -379,7 +382,7 @@
 
   function renderSummary() {
     const p = state.pat, t = P.TECHS[p.tech];
-    const total = p.grid.length;
+    const total = p.beadCount;
     $("sTech").textContent = t.label;
     $("sGrid").textContent = p.W + " × " + p.H + " cuentas";
     $("sSize").textContent = ((p.W * p.cellMM[0]) / 10).toFixed(1) + " × " + ((p.H * p.cellMM[1]) / 10).toFixed(1) + " cm";
@@ -401,47 +404,107 @@
     });
   }
 
-  function runChips(step) {
-    const box = document.createElement("div");
-    box.className = "runs";
-    step.runs.forEach((r) => {
+  const EMPTY = 255;
+  const isEmpty = (c) => c === EMPTY;
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+
+  function chip(r, big) {
+    const s = document.createElement("span");
+    s.className = "run" + (big ? " big" : "");
+    if (isEmpty(r.c)) {
+      s.innerHTML = '<span class="sw void">·</span><span class="rn">' + r.n + ' ×</span><span class="rl">espacio vacío <small>(sin cuenta)</small></span>';
+    } else {
       const c = state.pat.colors[r.c];
-      const s = document.createElement("span");
-      s.className = "run";
-      s.innerHTML = '<span class="sw" style="background:' + c.hex + ";color:" + c.text + '">' + c.symbol + "</span>" + r.n + " × " + c.code;
-      box.appendChild(s);
-    });
-    return box;
+      s.innerHTML = '<span class="sw" style="background:' + c.hex + ";color:" + c.text + '">' + c.symbol + '</span><span class="rn">' + r.n + ' ×</span><span class="rl">' + c.name + " <small>" + c.code + "</small></span>";
+    }
+    return s;
   }
   function runText(step) {
-    return step.runs.map((r) => r.n + "×" + state.pat.colors[r.c].code).join(", ");
+    return step.runs.map((r) => r.n + (isEmpty(r.c) ? " vacío" : " " + state.pat.colors[r.c].symbol)).join(" · ");
+  }
+
+  function howTo(step, p) {
+    const first = step.kind === "start";
+    switch (p.tech) {
+      case "loom":
+        return "Ensarta estas cuentas en la aguja, en el orden de abajo. Colócalas debajo de los hilos de la urdimbre (una cuenta entre cada par de hilos) y pasa la aguja de vuelta por encima, por dentro de todas las cuentas.";
+      case "square":
+        return first
+          ? "Ensarta todas estas cuentas en el hilo, en el orden de abajo. Esta fila es la base."
+          : "Ensarta estas cuentas. Luego únelas a la fila anterior: pasa la aguja por la cuenta de arriba de la fila anterior y otra vez por la cuenta nueva, una por una.";
+      case "brick":
+        return first
+          ? "Ensarta todas estas cuentas en el hilo, en el orden de abajo. Es la fila base (escalera)."
+          : "Agrega las cuentas de una en una: toma una cuenta, pasa la aguja por el hilo que une dos cuentas de la fila anterior y vuelve a pasar por la cuenta nueva para fijarla.";
+      default:
+        return first
+          ? "Ensarta todas estas cuentas en el hilo, en el orden de abajo. Quedan como una tira: este es el inicio del peyote."
+          : "Agrega una cuenta, salta una cuenta de la columna anterior y pasa la aguja por la siguiente. Repite hasta terminar la columna.";
+    }
+  }
+
+  function introHTML() {
+    const p = state.pat, t = P.TECHS[p.tech];
+    const warp = p.tech === "loom" ? "<li>Hilos de urdimbre: <b>" + (p.W + 1) + "</b> (uno más que cuentas de ancho).</li>" : "";
+    return "<h3>Materiales</h3><ul>" +
+      "<li>Cuentas de la lista de colores (con ~10 % extra).</li>" +
+      "<li>Hilo para cuentas (tipo Nymo o Fireline) y aguja fina para cuentas (nº 12 o 13).</li>" +
+      "<li>Tijeras y un fieltro o plato para que no rueden las cuentas.</li>" + warp + "</ul>" +
+      "<h3>Cómo leer la plantilla</h3><ul>" +
+      "<li>Cada <b>letra</b> es un color. La tabla de colores te dice cuál es cuál.</li>" +
+      "<li>Los <b>números</b> de los márgenes cuentan filas y columnas.</li>" +
+      (p.emptyCount ? "<li>Los <b>espacios en blanco</b> no llevan cuenta (es el fondo quitado)." + (p.tech === "loom" || p.tech === "square" ? " En telar y punto cuadrado la pieza queda rectangular: si quieres cubrirlos, elige un color en “Color del fondo”." : "") + "</li>" : "") +
+      "<li>Al avanzar por los pasos, la plantilla <b>resalta</b> lo que te toca y atenúa el resto.</li>" +
+      "<li>Cada paso te dice el <b>sentido</b> en que debes ensartar. Sigue exactamente el orden que se muestra.</li></ul>" +
+      "<p class='note'>Técnica elegida: <b>" + t.label + "</b>. Si es tu primera vez, haz una muestra pequeña antes de empezar la pieza final.</p>";
   }
 
   function renderSteps() {
+    $("introBody").innerHTML = introHTML();
     const ol = $("stepList"); ol.innerHTML = "";
     state.steps.forEach((s, i) => {
       const li = document.createElement("li");
-      li.textContent = s.title + " (" + s.dir + "): " + runText(s);
-      li.addEventListener("click", () => { go(i); window.scrollTo({ top: $("trkTitle").getBoundingClientRect().top + scrollY - 120, behavior: "smooth" }); });
+      li.innerHTML = '<span class="chk"></span><span><b>' + s.title + "</b> <span class='muted'>" + s.arrow + " " + s.dir.toLowerCase() + "</span><br><span class='lt'>" + runText(s) + "</span></span>";
+      li.dataset.i = i;
+      li.addEventListener("click", () => { go(i); goTo($("guideCard")); });
       ol.appendChild(li);
     });
     renderTracker();
   }
 
   function renderTracker() {
-    const s = state.steps[state.step];
+    const n = state.steps.length, i = state.step, s = state.steps[i];
+    $("progBar").style.width = (n ? Math.round(((i + 1) / n) * 100) : 0) + "%";
+    $("stepList").querySelectorAll("li").forEach((li, k) => { li.classList.toggle("done", k < i); li.classList.toggle("now", k === i); });
+    $("stepBody").hidden = !s;
+    $("stepHelp").hidden = !!s;
     if (!s) {
+      $("stepCount").textContent = n + " pasos en total";
       $("trkTitle").textContent = "Listo para empezar";
-      $("trkDir").textContent = state.steps.length + " pasos · pulsa › para ver el primero";
-      $("trkRuns").innerHTML = ""; $("trkNote").textContent = "";
+      $("nextStep").textContent = "Empezar →";
     } else {
-      $("trkTitle").textContent = s.title + "  ·  paso " + (state.step + 1) + "/" + state.steps.length;
-      $("trkDir").textContent = "Sentido: " + s.dir + " · " + s.seq.length + " cuentas";
-      const box = runChips(s); $("trkRuns").replaceChildren(...box.childNodes);
+      $("stepCount").textContent = "Paso " + (i + 1) + " de " + n;
+      $("trkTitle").textContent = s.title;
+      $("trkDir").innerHTML = '<span class="arrow">' + s.arrow + "</span><span>" + s.dir + "</span>";
+      $("stepDo").textContent = howTo(s, state.pat);
+      const box = $("trkRuns"); box.replaceChildren(...s.runs.map((r) => chip(r, true)));
+      const solid = s.seq.filter((c) => !isEmpty(c)).length;
+      $("trkTotal").textContent = "Total: " + plural(solid, "cuenta", "cuentas") + (solid < s.seq.length ? " (+ " + plural(s.seq.length - solid, "espacio vacío", "espacios vacíos") + ")" : "");
+      const strip = $("stepStrip"); strip.innerHTML = "";
+      s.seq.forEach((c, k) => {
+        const b = document.createElement("span");
+        if (isEmpty(c)) { b.className = "b void"; b.textContent = "·"; }
+        else { const col = state.pat.colors[c]; b.className = "b"; b.style.background = col.hex; b.style.color = col.text; b.textContent = col.symbol; }
+        b.title = "Cuenta " + (k + 1);
+        if ((k + 1) % 10 === 0) b.dataset.n = k + 1;
+        strip.appendChild(b);
+      });
       $("trkNote").textContent = s.note || "";
+      $("nextStep").textContent = i >= n - 1 ? "Último paso" : "Hecho, siguiente →";
     }
-    $("prevStep").disabled = state.step <= -1;
-    $("nextStep").disabled = state.step >= state.steps.length - 1;
+    $("prevStep").disabled = i <= -1;
+    $("nextStep").disabled = i >= n - 1 && i !== -1 ? true : false;
+    if (i === n - 1 && i >= 0) { $("nextStep").textContent = "¡Terminaste!"; }
   }
   function go(i) {
     state.step = Math.max(-1, Math.min(state.steps.length - 1, i));
