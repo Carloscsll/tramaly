@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Tramaly</title>
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=3">
 </head>
 <body>
 
@@ -33,7 +33,11 @@
 <div id="app" hidden>
   <header class="top">
     <div class="brand"><span class="dot"></span> Tramaly</div>
-    <div class="who"><span id="whoName"></span> <button id="logoutBtn" class="btn ghost small">Salir</button></div>
+    <div class="who">
+      <button id="projBtn" class="btn small" type="button">Mis proyectos</button>
+      <button id="colorsBtn" class="btn small" type="button">Mis colores</button>
+      <span id="whoName"></span> <button id="logoutBtn" class="btn ghost small" type="button">Salir</button>
+    </div>
   </header>
 
   <div class="layout">
@@ -45,6 +49,7 @@
           <span class="muted">JPG, PNG, WEBP, GIF · también puedes pegar con Ctrl/⌘+V · máx. 20 MB</span>
         </div>
         <input id="file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif" hidden>
+        <label class="check"><input id="autoBg" type="checkbox" checked> Quitar fondo liso al subir</label>
         <button id="sampleBtn" class="btn ghost small" type="button">Usar imagen de ejemplo</button>
       </section>
 
@@ -61,8 +66,17 @@
 
       <section>
         <h2>3 · Tamaño y colores</h2>
+        <label>Medida rápida
+          <select id="preset">
+            <option value="">Elegir…</option>
+            <option value="2">Aretes (2 cm de ancho)</option>
+            <option value="3">Pulsera (3 cm de ancho)</option>
+            <option value="4.5">Llavero o dije (4.5 cm)</option>
+            <option value="8">Parche o cuadro (8 cm)</option>
+          </select></label>
+        <label>Ancho de la pieza en cm <input id="widthCm" type="number" inputmode="decimal" step="0.1" min="0.5" max="30"></label>
         <label><span>Ancho: <b id="vWidth">40</b> cuentas</span>
-          <input id="width" type="range" min="10" max="150" value="40"></label>
+          <input id="width" type="range" min="6" max="150" value="40"></label>
         <label><span>Máx. colores: <b id="vColors">8</b></span>
           <input id="colors" type="range" min="2" max="24" value="8"></label>
         <label class="check"><input id="dither" type="checkbox"> Difuminado (más detalle)</label>
@@ -88,7 +102,7 @@
 
       <section>
         <h2>Vista</h2>
-        <label><span>Zoom <b id="vZoom">18</b></span><input id="zoom" type="range" min="8" max="40" value="18"></label>
+        <label><span>Zoom <b id="vZoom">18</b></span><input id="zoom" type="range" min="6" max="40" value="18"></label>
         <label class="check"><input id="symbols" type="checkbox" checked> Mostrar símbolos</label>
       </section>
     </aside>
@@ -96,8 +110,14 @@
     <main class="main">
       <div id="msg" class="msg" role="status" aria-live="polite" hidden></div>
       <div id="empty" class="empty card">
-        <h1>Convierte una imagen en plantilla de cuentas</h1>
-        <p class="muted">Sube una imagen, elige técnica y colores, y la app te da la plantilla, la lista de cuentas y las instrucciones paso a paso.</p>
+        <h1>De una foto a tu plantilla de cuentas</h1>
+        <ol class="howto">
+          <li><b>Sube una imagen.</b> Si el fondo es liso, se quita solo.</li>
+          <li><b>Elige técnica y medida.</b> Ajusta colores si quieres.</li>
+          <li><b>Revisa la plantilla.</b> Puedes corregir cuenta por cuenta.</li>
+          <li><b>Compra y teje.</b> Lista de materiales y guía paso a paso.</li>
+        </ol>
+        <button id="emptyUpload" class="btn primary" type="button">Subir una imagen</button>
       </div>
 
       <div id="result" hidden>
@@ -117,25 +137,64 @@
           <div class="ed-wrap"><canvas id="editCv"></canvas></div>
         </div>
 
-        <div class="summary card">
-          <div><span class="muted">Técnica</span><b id="sTech"></b></div>
-          <div><span class="muted">Cuadrícula</span><b id="sGrid"></b></div>
-          <div><span class="muted">Tamaño aprox.</span><b id="sSize"></b></div>
-          <div><span class="muted">Cuentas</span><b id="sBeads"></b></div>
+        <div class="card">
+          <div class="proj-row">
+            <label class="grow">Nombre del proyecto <input id="projName" type="text" maxlength="60"></label>
+            <small id="saved" class="muted" role="status"></small>
+          </div>
+          <div class="summary">
+            <div><span class="muted">Cuentas que se usan</span><b id="sBeads" class="hero"></b></div>
+            <div><span class="muted">Tamaño aprox.</span><b id="sSize"></b></div>
+            <div><span class="muted">Columnas × filas</span><b id="sGrid"></b></div>
+            <div><span class="muted">Colores</span><b id="sColors"></b></div>
+            <div><span class="muted">Técnica</span><b id="sTech"></b></div>
+          </div>
           <div class="actions">
-            <button id="pngBtn" class="btn">Descargar PNG</button>
-            <button id="printBtn" class="btn">Imprimir / PDF</button>
-            <button id="csvBtn" class="btn">Lista (CSV)</button>
+            <button id="printBtn" class="btn primary" type="button">Imprimir / PDF</button>
+            <button id="pngBtn" class="btn" type="button">Descargar imagen</button>
+            <button id="csvBtn" class="btn" type="button">Lista de compra (CSV)</button>
           </div>
         </div>
 
-        <div class="card chart-wrap"><canvas id="chart"></canvas></div>
+        <div class="card" id="chartCard">
+          <div class="chart-bar">
+            <button id="editBtn" class="btn small" type="button">✎ Editar cuentas</button>
+            <div class="zoom">
+              <button id="zoomOut" class="btn small" type="button" aria-label="Alejar">−</button>
+              <button id="zoomFit" class="btn small" type="button">Ajustar</button>
+              <button id="zoomIn" class="btn small" type="button" aria-label="Acercar">+</button>
+            </div>
+          </div>
+          <div id="editBar" class="edit-bar" hidden>
+            <div class="seg" role="group" aria-label="Herramienta de edición">
+              <button type="button" class="btn small" data-edit="paint">Pintar</button>
+              <button type="button" class="btn small" data-edit="fill">Rellenar</button>
+              <button type="button" class="btn small" data-edit="erase">Borrar</button>
+              <button type="button" class="btn small" data-edit="move">Mover</button>
+            </div>
+            <button id="undoEdit" class="btn small" type="button">↶ Deshacer</button>
+            <div id="paintColors" class="picks"></div>
+            <select id="paintMore" aria-label="Pintar con otro color"></select>
+          </div>
+          <div id="chartWrap" class="chart-wrap"><canvas id="chart" aria-label="Plantilla de cuentas"></canvas></div>
+        </div>
 
-        <div class="card">
-          <h2>Colores y cantidades</h2>
-          <p class="muted small">Toca un color para resaltarlo en la plantilla. Se sugiere comprar ~10 % extra.</p>
-          <table id="legend" class="legend"></table>
-          <p class="note">Los códigos son referencias internas: verifícalos con la carta oficial de Miyuki antes de comprar.</p>
+        <div class="card" id="matCard">
+          <h2>Cuentas y materiales</h2>
+          <div id="totals" class="totals"></div>
+          <p class="muted small">Solo se cuentan las cuentas que lleva el dibujo; los espacios vacíos no. Toca un color para verlo en la plantilla.</p>
+          <ul id="legend" class="legend"></ul>
+          <details>
+            <summary>Ajustar el cálculo (margen, paquete y precio)</summary>
+            <div class="grid2">
+              <label>Margen extra (%) <input id="mExtra" type="number" inputmode="numeric" min="0" max="100" step="5"></label>
+              <label>Gramos por paquete <input id="mPack" type="number" inputmode="decimal" min="0.5" step="0.1"></label>
+              <label>Precio por paquete ($) <input id="mPrice" type="number" inputmode="decimal" min="0" step="1" placeholder="opcional"></label>
+              <label>Cuentas por gramo <input id="mPerGram" type="number" inputmode="numeric" min="20" step="5"></label>
+            </div>
+            <p class="note">Los gramos son aproximados (Delica 11/0: unas 175–200 cuentas por gramo, según el acabado).</p>
+          </details>
+          <p class="note">Los códigos C01–C50 son referencias internas. Pon tus códigos reales de Miyuki en “Mis colores”.</p>
         </div>
 
         <div class="card" id="guideCard">
@@ -167,7 +226,11 @@
             <button id="prevStep" class="btn" type="button">← Anterior</button>
             <button id="nextStep" class="btn primary" type="button">Empezar →</button>
           </div>
-          <button id="clearStep" class="btn ghost small" type="button">Quitar resaltado</button>
+          <div class="row2">
+            <button id="clearStep" class="btn ghost small" type="button">Ver la plantilla completa</button>
+            <button id="restartStep" class="btn ghost small" type="button">Volver al principio</button>
+          </div>
+          <label class="check" id="awakeRow"><input id="awake" type="checkbox"> Mantener la pantalla encendida</label>
           <details class="allsteps"><summary>Ver todos los pasos</summary><ol id="stepList"></ol></details>
         </div>
       </div>
@@ -175,18 +238,44 @@
   </div>
 </div>
 
+<dialog id="projDlg" class="dlg" aria-labelledby="projTitle">
+  <div class="dlg-head"><h2 id="projTitle">Mis proyectos</h2><button id="projClose" class="btn small primary" type="button">Cerrar</button></div>
+  <p class="muted small">Se guardan solos en este navegador. Para pasar uno a otro equipo (o como respaldo), usa “Descargar copia” e “Importar”.</p>
+  <button id="projImport" class="btn small" type="button">Importar un proyecto</button>
+  <input id="projFile" type="file" accept=".json,application/json" hidden>
+  <ul id="projList" class="proj-list"></ul>
+</dialog>
+
+<dialog id="colorsDlg" class="dlg" aria-labelledby="colorsTitle">
+  <div class="dlg-head"><h2 id="colorsTitle">Mis colores</h2><button id="colorClose" class="btn small primary" type="button">Listo</button></div>
+  <p class="muted small">Marca los colores que tienes y escribe sus códigos reales. La plantilla solo usa los marcados.</p>
+  <details>
+    <summary>Agregar varios de golpe</summary>
+    <p class="muted small">Una línea por color: <code>código; nombre; #color</code></p>
+    <textarea id="colorText" rows="4" placeholder="DB0000; Nombre del color; #aa3366"></textarea>
+    <div class="row2"><button id="colorImport" class="btn small" type="button">Agregar lista</button><button id="colorOnlyMine" class="btn small" type="button">Usar solo mis colores</button></div>
+  </details>
+  <div class="row2"><button id="colorAdd" class="btn small" type="button">+ Agregar un color</button><button id="colorReset" class="btn ghost small" type="button">Restablecer lista</button></div>
+  <p id="colorStatus" class="note" role="status"></p>
+  <div id="colorList" class="color-list"></div>
+</dialog>
+
 <nav id="dock" class="dock" aria-label="Navegación rápida" hidden>
-  <button id="dockSet" class="btn" type="button">⚙ Ajustes</button>
-  <button id="dockChart" class="btn" type="button">▦ Plantilla</button>
-  <button id="dockSteps" class="btn primary" type="button">▶ Pasos</button>
+  <button id="dockSet" class="btn" type="button">Ajustes</button>
+  <button id="dockChart" class="btn" type="button">Plantilla</button>
+  <button id="dockMat" class="btn" type="button">Cuentas</button>
+  <button id="dockSteps" class="btn primary" type="button">Pasos</button>
 </nav>
 
 <div id="printArea" aria-hidden="true"></div>
 
-<script src="js/palette.js"></script>
-<script src="js/users.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/pattern.js"></script>
-<script src="js/app.js"></script>
+<script src="js/palette.js?v=3"></script>
+<script src="js/users.js?v=3"></script>
+<script src="js/auth.js?v=3"></script>
+<script src="js/pattern.js?v=3"></script>
+<script src="js/store.js?v=3"></script>
+<script src="js/colors.js?v=3"></script>
+<script src="js/background.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>
